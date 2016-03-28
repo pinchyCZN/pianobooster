@@ -52,6 +52,7 @@ public:
 
     void setSpeed(int value){ speedSpin->setValue(value); }
     int getSpeed(){return speedSpin->value();}
+    CSong* m_song;
 
 public slots:
     void on_playFromStartButton_clicked(bool clicked);
@@ -77,7 +78,6 @@ private:
     bool eventFilter(QObject *obj, QEvent *event);
     void reloadKeyCombo(bool major);
 
-    CSong* m_song;
     CSettings* m_settings;
 
     bool m_atTheEndOfTheSong;

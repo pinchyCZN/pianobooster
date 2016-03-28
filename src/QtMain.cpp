@@ -24,6 +24,9 @@
 #include <QtOpenGL>
 #include "QtWindow.h"
 
+
+QtWindow *_window=0;
+
 int main(int argc, char *argv[])
 {
 
@@ -59,11 +62,9 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-
-
-    QtWindow window;
-
+	QtWindow window;
     window.show();
+	_window=&window;
 
     int value = app.exec();
     closeLogs();

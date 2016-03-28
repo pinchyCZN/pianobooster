@@ -68,7 +68,7 @@ public:
 
     void loadTutorHtml(const QString & name);
     void setCurrentFile(const QString &fileName);
-
+    GuiTopBar *m_topBar;
 private slots:
     void open();
     void help();
@@ -179,7 +179,6 @@ private:
     CSettings* m_settings;
 
     GuiSidePanel *m_sidePanel;
-    GuiTopBar *m_topBar;
     QTextBrowser *m_tutorWindow;
 
 

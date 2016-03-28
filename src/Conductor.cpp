@@ -84,6 +84,59 @@ CConductor::CConductor()
     rewind();
     testWrongNoteSound(false);
 }
+#include "QtWindow.h"
+extern QtWindow *_window;
+int check_notes(CConductor &cond,CMidiEvent ev)
+{
+	static int state=0;
+	if(ev.type()==MIDI_NOTE_ON){
+		switch(state){
+		case 0:
+			if(ev.note()==36)
+				state=1;
+			if(ev.note()==38)
+				state=2;
+			break;
+		case 1:
+			if(ev.note()==38)
+				state=10;
+			break;
+		case 2:
+			if(ev.note()==36){
+				state=10;
+			}
+			break;
+		case 10:
+			if(ev.note()==96){
+				double b=cond.getBarNumber();
+				b++;
+				_window->m_topBar->m_song->setPlayFromBar(b);
+				//cond.setPlayFromBar(b);
+				//cond.rewind();
+				_window->m_topBar->m_song->rewind();
+			}
+			else if(ev.note()==95){
+				double b=cond.getBarNumber();
+				b--;
+				if(b<0)
+					b=0;
+				_window->m_topBar->m_song->setPlayFromBar(b);
+				_window->m_topBar->m_song->rewind();
+				//cond.setPlayFromBar(b);
+				//cond.rewind();
+			}
+			break;
+		}
+	}else if(ev.type()==MIDI_NOTE_OFF){
+		switch(state){
+		default:
+			if(ev.note()==36 || ev.note()==38)
+				state=0;
+			break;
+		}
+	}
+	return 0;
+}
 
 CConductor::~CConductor()
 {
@@ -690,7 +743,6 @@ void CConductor::pianistInput(CMidiEvent inputNote)
 
     // inputNote.transpose(+12); fixme
 
-
     if (m_testWrongNoteSound)
         goodSound = false;
 
@@ -705,6 +757,7 @@ void CConductor::pianistInput(CMidiEvent inputNote)
     if (inputNote.type() == MIDI_NOTE_ON)
     {
 
+		printf("note=%i\n",inputNote.note());
         if ( validatePianistNote(inputNote) == true)
         {
             m_goodPlayedNotes.addNote(hand, inputNote.note());
@@ -923,8 +976,11 @@ void CConductor::realTimeEngine(int mSecTicks)
     if (!m_followPlayingTimeOut)
         m_pianistTiming += ticks;
 
-    while (checkMidiInput() > 0)
-        expandPianistInput(readMidiInput());
+	while (checkMidiInput() > 0){
+		CMidiEvent ev=readMidiInput();
+        expandPianistInput(ev);
+		check_notes(*this,ev);
+	}
 
     if (getfollowState() == PB_FOLLOW_waiting )
     {
