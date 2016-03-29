@@ -88,25 +88,19 @@ CConductor::CConductor()
 extern QtWindow *_window;
 int check_notes(CConductor &cond,CMidiEvent ev)
 {
-	static int state=0;
+#define MASK1 1
+#define MASK2 2
+#define MASK3 4
+	static int mask=0;
+
 	if(ev.type()==MIDI_NOTE_ON){
-		switch(state){
-		case 0:
-			if(ev.note()==36)
-				state=1;
-			if(ev.note()==38)
-				state=2;
-			break;
-		case 1:
-			if(ev.note()==38)
-				state=10;
-			break;
-		case 2:
-			if(ev.note()==36){
-				state=10;
-			}
-			break;
-		case 10:
+		if(ev.note()==36)
+			mask|=MASK1;
+		if(ev.note()==38)
+			mask|=MASK2;
+		if(ev.note()==40)
+			mask|=MASK3;
+		if(mask==(MASK1|MASK2)){
 			if(ev.note()==96){
 				double b=cond.getBarNumber();
 				b++;
@@ -125,15 +119,23 @@ int check_notes(CConductor &cond,CMidiEvent ev)
 				//cond.setPlayFromBar(b);
 				//cond.rewind();
 			}
-			break;
+		}
+		if(mask==(MASK1|MASK2|MASK3)){
+			if(ev.note()==96){
+				printf("listen mode\n");
+				_window->m_topBar->m_song->setPlayMode(PB_PLAY_MODE_listen);
+			}else if(ev.note()==95){
+				printf("follow mode\n");
+				_window->m_topBar->m_song->setPlayMode(PB_PLAY_MODE_followYou);
+			}
 		}
 	}else if(ev.type()==MIDI_NOTE_OFF){
-		switch(state){
-		default:
-			if(ev.note()==36 || ev.note()==38)
-				state=0;
-			break;
-		}
+		if(ev.note()==36)
+			mask&=~MASK1;
+		if(ev.note()==38)
+			mask&=~MASK2;
+		if(ev.note()==40)
+			mask&=~MASK3;
 	}
 	return 0;
 }
