@@ -40,7 +40,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="E:\DEV\MSVC_Projects\pianobooster\PianoBooster\src\other;E:\DEV\MSVC_Projects\QT\include\QtOpenGL;E:\DEV\MSVC_Projects\QT\include\QtXml;E:\DEV\MSVC_Projects\QT\include\QtGui;E:\DEV\MSVC_Projects\QT\include\QtCore;E:\DEV\MSVC_Projects\QT\include\;E:\DEV\MSVC_Projects\QT\include\Qt"
+				AdditionalIncludeDirectories="..\src\other;E:\DEV\MSVC_Projects\QT\include\QtOpenGL;E:\DEV\MSVC_Projects\QT\include\QtXml;E:\DEV\MSVC_Projects\QT\include\QtGui;E:\DEV\MSVC_Projects\QT\include\QtCore;E:\DEV\MSVC_Projects\QT\include\;E:\DEV\MSVC_Projects\QT\include\Qt"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"

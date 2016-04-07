@@ -30,6 +30,7 @@ int main(int argc,char **argv)
 
 	list_midi_in();
 	list_midi_out();
+	parse_midi_file("C:\\temp\\PMLP336239-Scarlatti_Sonate_K.517.mid");
 	printf("done\n");
 	getch();
 }
