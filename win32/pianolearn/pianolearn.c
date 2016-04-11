@@ -31,7 +31,7 @@ int set_screen_buffer_size(int x,int y)
 
 int list_midi(MIDI_DEV_LIST *mdev_list,
 			  UINT ( __stdcall * get_num_devs)(void),
-			  MMRESULT (__stdcall * get_dev_caps)(UINT,LPMIDIOUTCAPS,UINT),
+			  MMRESULT (__stdcall * get_dev_caps)(UINT,void *,UINT),
 			  void *caps,int caps_size,int name_offset)
 {
 	int i,count;
@@ -59,11 +59,11 @@ int list_midi(MIDI_DEV_LIST *mdev_list,
 	return count;
 }
 
-int test_midi()
+int test_midi(int index)
 {
 	if(mdev_out.count>1){
 		hmo=0;
-		midiOutOpen(&hmo,mdev_out.devices[1].id,NULL,0,CALLBACK_NULL);
+		midiOutOpen(&hmo,mdev_out.devices[index].id,NULL,0,CALLBACK_NULL);
 		if(hmo!=0){
 			DWORD msg;
 			char *p=&msg;
@@ -79,23 +79,48 @@ int test_midi()
 		}
 	}
 }
-int find_keyboard()
+int find_keyboard(MIDI_DEV_LIST *list)
 {
+	int i;
+	for(i=0;i<list->count;i++){
+		char n1[MAXPNAMELEN];
+		strncpy(n1,list->devices[i].name,sizeof(n1));
+		n1[sizeof(n1)-1]=0;
+		strlwr(n1);
+		if(strstr(n1,"keyboard"))
+			return i;
+	}
+	return -1;
 }
-
+void CALLBACK in_event(HMIDIIN hMidiIn,UINT wMsg,DWORD dwInstance,DWORD dwParam1,DWORD dwParam2)
+{
+	printf("dfsdf\n");
+}
 int main(int argc,char **argv)
 {
 	char *fname;
 	MIDIOUTCAPS ocaps;
 	MIDIINCAPS icaps;
 	int offset;
+	int index_out,index_in;
 	offset=(char*)&ocaps.szPname-(char*)&ocaps;
 	list_midi(&mdev_out,midiOutGetNumDevs,midiOutGetDevCaps,&ocaps,sizeof(ocaps),offset);
 	offset=(char*)&icaps.szPname-(char*)&icaps;
 	list_midi(&mdev_in,midiInGetNumDevs,midiInGetDevCaps,&icaps,sizeof(icaps),offset);
+	index_out=find_keyboard(&mdev_out);
+	if(index_out>=0){
+		index_in=find_keyboard(&mdev_in);
+		if(index_in>=0){
+			//midiOutOpen(&hmo,mdev_out.devices[index].id,NULL,0,CALLBACK_NULL);
+			midiInOpen(&hmi,mdev_in.devices[index_in].id,in_event,0,MIDI_IO_STATUS|CALLBACK_FUNCTION);
+		}
+	}
 	fname="E:\\music\\Mp3\\MusicStudy\\keyboard\\Scarlatti_Sonate_K.517.mid";
 	//fname="C:\\temp\\PMLP336239-Scarlatti_Sonate_K.517.mid";
 	//midi_file_test(fname);
 	printf("done\n");
+	while(1){
+		Sleep(100);
+	}
 	getch();
 }
