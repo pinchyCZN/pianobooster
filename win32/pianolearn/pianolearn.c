@@ -7,10 +7,14 @@ typedef struct{
 	int id;
 }MIDI_DEVICE;
 
-MIDI_DEVICE *midi_dev_in=0;
-MIDI_DEVICE *midi_dev_out=0;
-int midi_dev_in_cnt=0;
-int midi_dev_out_cnt=0;
+typedef struct{
+	int count;
+	MIDI_DEVICE *devices;
+}MIDI_DEV_LIST;
+
+MIDI_DEV_LIST mdev_out;
+MIDI_DEV_LIST mdev_in;
+
 HMIDIOUT	hmo=0;
 HMIDIIN		hmi=0;
 
@@ -25,66 +29,49 @@ int set_screen_buffer_size(int x,int y)
 	return TRUE;
 }
 
-int list_midi_in()
+int list_midi(MIDI_DEV_LIST *mdev_list,
+			  UINT ( __stdcall * get_num_devs)(void),
+			  MMRESULT (__stdcall * get_dev_caps)(UINT,LPMIDIOUTCAPS,UINT),
+			  void *caps,int caps_size,int name_offset)
 {
 	int i,count;
-	midi_dev_in_cnt=count=midiInGetNumDevs();
-	if(midi_dev_in!=0)
-		free(midi_dev_in);
-	midi_dev_in=0;
+	mdev_list->count=count=get_num_devs();
+	if(0!=mdev_list->devices)
+		free(mdev_list->devices);
+	mdev_list->devices=0;
 	if(count==0)
 		return count;
-	midi_dev_in=calloc(count,sizeof(MIDI_DEVICE));
+	mdev_list->devices=calloc(count,sizeof(MIDI_DEVICE));
 	for(i=0;i<count;i++){
-		MIDIINCAPS caps={0};
-		if(MMSYSERR_NOERROR==midiInGetDevCaps(i,&caps,sizeof(caps))){
-			if(midi_dev_in!=0){
-				strncpy(midi_dev_in[i].name,caps.szPname,sizeof(midi_dev_in[i].name));
-				midi_dev_in[i].name[sizeof(midi_dev_in[i].name)-1]=0;
-				midi_dev_in[i].id=i;
+		if(MMSYSERR_NOERROR==get_dev_caps(i,caps,caps_size)){
+			char *name=(char*)caps+name_offset;
+			if(mdev_list->devices!=0){
+				MIDI_DEVICE *md=&mdev_list->devices[i];
+				strncpy(md->name,name,sizeof(md->name));
+				md->name[sizeof(md->name)-1]=0;
+				md->id=i;
 			}
-			printf("%s\n",caps.szPname);
+			printf("%s\n",name);
 		}
 	}
-	return count;
-}
-int list_midi_out()
-{
-	int i,count;
-	midi_dev_out_cnt=count=midiOutGetNumDevs();
-	if(midi_dev_out!=0)
-		free(midi_dev_out);
-	midi_dev_out=0;
-	if(count==0)
-		return count;
-	midi_dev_out=calloc(count,sizeof(MIDI_DEVICE));
-	for(i=0;i<count;i++){
-		MIDIOUTCAPS caps={0};
-		if(MMSYSERR_NOERROR==midiOutGetDevCaps(i,&caps,sizeof(caps))){
-			if(midi_dev_out!=0){
-				strncpy(midi_dev_out[i].name,caps.szPname,sizeof(midi_dev_out[i].name));
-				midi_dev_out[i].name[sizeof(midi_dev_out[i].name)-1]=0;
-				midi_dev_out[i].id=i;
-			}
-			printf("%s\n",caps.szPname);
-		}
-	}
+	if(0==mdev_in.devices)
+		count=0;
 	return count;
 }
 
 int test_midi()
 {
-	if(midi_dev_out_cnt>1){
+	if(mdev_out.count>1){
 		hmo=0;
-		midiOutOpen(&hmo,midi_dev_out[1].id,NULL,0,CALLBACK_NULL);
+		midiOutOpen(&hmo,mdev_out.devices[1].id,NULL,0,CALLBACK_NULL);
 		if(hmo!=0){
 			DWORD msg;
 			char *p=&msg;
 			p[0]=0x90;
 			p[1]=0x3c;
-			p[2]=0x40;
+			p[2]=0x01;
 			midiOutShortMsg(hmo,msg);
-			Sleep(1000);
+//			Sleep(1000);
 			p[0]=0x80;
 			p[1]=0x3c;
 			p[2]=0x40;
@@ -92,15 +79,23 @@ int test_midi()
 		}
 	}
 }
+int find_keyboard()
+{
+}
+
 int main(int argc,char **argv)
 {
 	char *fname;
-//	list_midi_in();
-//	list_midi_out();
-//	test_midi();
+	MIDIOUTCAPS ocaps;
+	MIDIINCAPS icaps;
+	int offset;
+	offset=(char*)&ocaps.szPname-(char*)&ocaps;
+	list_midi(&mdev_out,midiOutGetNumDevs,midiOutGetDevCaps,&ocaps,sizeof(ocaps),offset);
+	offset=(char*)&icaps.szPname-(char*)&icaps;
+	list_midi(&mdev_in,midiInGetNumDevs,midiInGetDevCaps,&icaps,sizeof(icaps),offset);
 	fname="E:\\music\\Mp3\\MusicStudy\\keyboard\\Scarlatti_Sonate_K.517.mid";
 	//fname="C:\\temp\\PMLP336239-Scarlatti_Sonate_K.517.mid";
-	midi_file_test(fname);
+	//midi_file_test(fname);
 	printf("done\n");
 	getch();
 }
