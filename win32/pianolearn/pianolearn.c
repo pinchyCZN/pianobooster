@@ -100,7 +100,7 @@ int main(int argc,char **argv)
 //	test_midi();
 	fname="E:\\music\\Mp3\\MusicStudy\\keyboard\\Scarlatti_Sonate_K.517.mid";
 	//fname="C:\\temp\\PMLP336239-Scarlatti_Sonate_K.517.mid";
-	parse_midi_file(fname);
+	midi_file_test(fname);
 	printf("done\n");
 	getch();
 }
