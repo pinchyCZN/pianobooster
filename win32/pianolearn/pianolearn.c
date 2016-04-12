@@ -18,6 +18,16 @@ MIDI_DEV_LIST mdev_in;
 HMIDIOUT	hmo=0;
 HMIDIIN		hmi=0;
 
+int file_exist(char *fname)
+{
+	int result=FALSE;
+	int a;
+	a=GetFileAttributes(fname);
+	if(a!=0xFFFFFFFF)
+		if(a!=FILE_ATTRIBUTE_DIRECTORY)
+			result=TRUE;
+	return result;
+}
 int set_screen_buffer_size(int x,int y)
 {
 	HANDLE hcon;
@@ -96,12 +106,20 @@ void CALLBACK in_event(HMIDIIN hMidiIn,UINT wMsg,DWORD dwInstance,DWORD dwParam1
 {
 	printf("dfsdf\n");
 }
+DWORD WINAPI read_midi_thread(void *arg)
+{
+	printf("thread\n");
+	while(1){
+		Sleep(100);
+	}
+}
 int main(int argc,char **argv)
 {
 	char *fname;
 	MIDIOUTCAPS ocaps;
 	MIDIINCAPS icaps;
 	int offset;
+	DWORD thread_id=0;
 	int index_out,index_in;
 	offset=(char*)&ocaps.szPname-(char*)&ocaps;
 	list_midi(&mdev_out,midiOutGetNumDevs,midiOutGetDevCaps,&ocaps,sizeof(ocaps),offset);
@@ -116,11 +134,11 @@ int main(int argc,char **argv)
 		}
 	}
 	fname="E:\\music\\Mp3\\MusicStudy\\keyboard\\Scarlatti_Sonate_K.517.mid";
-	//fname="C:\\temp\\PMLP336239-Scarlatti_Sonate_K.517.mid";
-	//midi_file_test(fname);
+	if(!file_exist(fname))
+		fname="C:\\temp\\PMLP336239-Scarlatti_Sonate_K.517.mid";
+//	midi_file_test(fname);
+	if(hmi!=0)
+		CreateThread(NULL,0,read_midi_thread,hmi,0,&thread_id);
 	printf("done\n");
-	while(1){
-		Sleep(100);
-	}
 	getch();
 }
