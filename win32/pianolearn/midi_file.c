@@ -348,7 +348,7 @@ int set_current_fname(char *fname)
 
 int play_midi_event(HMIDIOUT hmo,MIDI_EVENT *me)
 {
-	DWORD msg;
+	DWORD msg=0;
 	char *p=&msg;
 	if(hmo==0)
 		return 0;
@@ -362,8 +362,8 @@ int clear_all_notes(HMIDIOUT hmo)
 	int i;
 	if(hmo==0)
 		return 0;
-	for(i=0;i<255;i++){
-		DWORD msg;
+	for(i=0x24;i<=0x60;i++){
+		DWORD msg=0;
 		char *p=&msg;
 		p[0]=0x80;
 		p[1]=i; //note
@@ -372,42 +372,119 @@ int clear_all_notes(HMIDIOUT hmo)
 	}
 	return 0;
 }
-int rewind_track(HMIDIOUT hmo,MIDI_TRACK *mt,int *index)
+int seek_next_note(MIDI_TRACK *mt,int *index)
 {
-	int result=FALSE;
-	int time;
 	int i=*index;
 	if(i>=mt->event_count)
-		i=mt->event_count-1;
-	if(i<0)
 		i=0;
-	time=mt->events[i].time;
-	for( ;i>0;i--){
-		MIDI_EVENT *me;
-		me=&mt->events[i];
-		if(me->time<time){
-			int event=me->type&0xF0;
-			int velo=me->data2;
-			if(event==0x90)
-				if(velo!=0){
-					printf("clear\n");
-					clear_all_notes(hmo);
-					*index=i;
-					result=TRUE;
-					break;
-				}
+	for( ;i<mt->event_count;i++){
+		MIDI_EVENT *me=&mt->events[i];
+		int event,velo;
+		event=me->type&0xF0;
+		velo=me->data2;
+		if(event==0x90){
+			if(velo!=0){
+				*index=i;
+				return TRUE;
+			}
 		}
 	}
+	return FALSE;
+}
+MIDI_EVENT current_events[16]={0};
+int ce_count=0;
+
+int play_current_notes(HMIDIOUT hmo,MIDI_EVENT *mlist,int count)
+{
+	int i;
+	for(i=0;i<count;i++){
+		play_midi_event(hmo,&mlist[i]);
+	}
+	return count;
+}
+int gather_notes(MIDI_TRACK *mt,int *index,MIDI_EVENT *mlist,int list_size,int *total)
+{
+	int count=0;
+	int time=0;
+	int i=*index;
+	if(i>=mt->event_count)
+		return FALSE;
+	for( ;i<mt->event_count;i++){
+		MIDI_EVENT *me=&mt->events[i];
+		int event,velo;
+		event=me->type&0xF0;
+		velo=me->data2;
+		if(event==0x90){
+			if(velo!=0){
+				if(count>=list_size)
+					break;
+				if(time==0)
+					time=me->time;
+				if(me->time > time)
+					break;
+				mlist[count]=*me;
+				mlist[count].data2=1;
+				count++;
+			}
+		}
+	}
+	*index=i;
+	*total=count;
+	return count;
+}
+int check_key_press(HMIDIOUT hmo,MIDI_EVENT *mlist,int list_count)
+{
+	int i,played=0;
+	int result=FALSE;
+	extern unsigned char in_keys[];
+	for(i=0;i<list_count;i++){
+		int key=mlist[i].data&0xFF;
+		if(mlist[i].data2==0)
+			played++;
+		else{
+			if(in_keys[key]!=0){
+				mlist[i].data2=0;
+				play_midi_event(hmo,&mlist[i]);
+				played++;
+			}
+		}
+	}
+	if(played>=list_count)
+		result=TRUE;
 	return result;
 }
-int special_command(HMIDIOUT hmo,MIDI_TRACK *mt,int *index)
+int check_commands(MIDI_TRACK *mt,int *index)
 {
-	extern unsigned char in_keys[];
 	int result=FALSE;
-	if(in_keys[0x24]!=0 && in_keys[0x26]!=0){
+	extern unsigned char in_keys[];
+	if(in_keys[0x24] && in_keys[0x26]){
 		if(in_keys[0x5F]){
-			rewind_track(hmo,mt,index);
+			int i,time,target;
+			i=(*index)-1;
+			if(i<=0){
+				*index=0;
+				return TRUE;
+			}
+			time=mt->events[i].time;
+			target=0;
+			printf("begin=%i\n",i);
+			for( ;i>0;i--){
+				MIDI_EVENT *me=&mt->events[i];
+				if(me->time<time){
+					int event=me->type&0xF0;
+					if(event==0x90){
+						int velo=me->data2;
+						if(velo!=0){
+							int delta=time-me->time;
+							if(delta>500)
+								break;
+						}
+					}
+				}
+			}
 			result=TRUE;
+			*index=i;
+			printf("end=%i\n",i);
 		}
 	}
 	return result;
@@ -417,7 +494,6 @@ DWORD WINAPI play_midi_thread(void *arg)
 	HMIDIOUT	hmo=arg;
 	MIDI_FILE mf={0};
 	extern HANDLE thread_event;
-	extern unsigned char in_keys[];
 	int index=0;
 	printf("thread\n");
 
@@ -434,47 +510,26 @@ DWORD WINAPI play_midi_thread(void *arg)
 				while(1){
 					if(index>=mt->event_count)
 						index=0;
-					if(mt->event_count>0){
-						MIDI_EVENT *me;
-						int event,key,velo;
-						me=&mt->events[index];
-						event=me->type&0xF0;
-						key=me->data;
-						velo=me->data2;
-						if(event==0x80 || event==0x90){
-							int count=index;
-							if(event==0x90 && velo>1)
-								velo=1;
-							printf("play\n");
+					if(seek_next_note(mt,&index)){
+						int next_index=index;
+						ce_count=0;
+						gather_notes(mt,&index,current_events,sizeof(current_events)/sizeof(MIDI_EVENT),&ce_count);
+						if(ce_count>0){
+							printf("time=%i\n",current_events[0].time);
+							play_current_notes(hmo,current_events,ce_count);
 							while(1){
-								if((me->type&0xF0)==0x90)
-									if(me->data2>1)
-										me->data2=1;
-								play_midi_event(hmo,me);
-								count++;
-								if(count>=mt->event_count)
-									break;
-								if(me->time!=mt->events[count].time)
-									break;
-								else
-									me=&mt->events[count];
-							}
-							if(event==0x90 && velo!=0){
 								WaitForSingleObject(thread_event,INFINITE);
-								if(!special_command(hmo,mt,&index)){
-									if(in_keys[key&0xFF]!=0)
-										index++;
+								if(check_key_press(hmo,current_events,ce_count))
+									break;
+								if(check_commands(mt,&index)){
+									clear_all_notes(hmo);
+									break;
 								}
 							}
-							else
-								index++;
-							break;
-						}
-
-					}
-					else
-						break;
-					index++;
+						}else
+							Sleep(100);
+					}else
+						Sleep(100);
 				}
 			}
 		}
