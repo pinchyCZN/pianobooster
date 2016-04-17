@@ -101,7 +101,7 @@ int decode_midi_event(unsigned char *data,int dlen,int event)
 				int d1,d2;
 				d1=data[0];
 				d2=data[1];
-				printf("midi %02X %02X %02X\n",event,d1,d2);
+				//printf("midi %02X %02X %02X\n",event,d1,d2);
 			}
 			result=2;
 		}
@@ -112,7 +112,7 @@ int decode_midi_event(unsigned char *data,int dlen,int event)
 			if(dlen>=1){
 				int d1;
 				d1=data[0];
-				printf("midi %02X %02X\n",event,d1);
+				//printf("midi %02X %02X\n",event,d1);
 			}
 			result=1;
 		}
@@ -150,7 +150,7 @@ int count_track_events(unsigned char *data,int tlen,int *event_count)
 				count=get_vlq(p,tlen-index,&len);
 				index+=count+len;
 				p+=count+len;
-				printf("sysex event %02X\n",event);
+				//printf("sysex event %02X\n",event);
 			}
 			break;
 		case 0xFF:
@@ -164,14 +164,14 @@ int count_track_events(unsigned char *data,int tlen,int *event_count)
 				count=get_vlq(p,tlen-index,&len);
 				p+=count+len;
 				index+=count+len;
-				printf("meta event %02X len=%i\n",type,len);
-				if(type==0x2F)
-					printf("end of track\n");
+				//printf("meta event %02X len=%i\n",type,len);
+				//if(type==0x2F)
+				//	printf("end of track\n");
 			}
 			break;
 		default: //midi event
 			{
-				printf("delta = %i ",delta);
+				//printf("delta = %i ",delta);
 				count=decode_midi_event(p,tlen-index,event);
 				p+=count;
 				index+=count;
@@ -337,4 +337,146 @@ int midi_file_test(char *fname)
 	mf.fname[sizeof(mf.fname)-1]=0;
 	parse_midi_file(&mf);
 	dump_midi_struct(&mf);
+}
+char current_fname[MAX_PATH]={0};
+int set_current_fname(char *fname)
+{
+	strncpy(current_fname,fname,sizeof(current_fname));
+	current_fname[sizeof(current_fname)-1]=0;
+	return 0;
+}
+
+int play_midi_event(HMIDIOUT hmo,MIDI_EVENT *me)
+{
+	DWORD msg;
+	char *p=&msg;
+	if(hmo==0)
+		return 0;
+	p[0]=me->type;
+	p[1]=me->data; //note
+	p[2]=me->data2; //velo
+	return midiOutShortMsg(hmo,msg);
+}
+int clear_all_notes(HMIDIOUT hmo)
+{
+	int i;
+	if(hmo==0)
+		return 0;
+	for(i=0;i<255;i++){
+		DWORD msg;
+		char *p=&msg;
+		p[0]=0x80;
+		p[1]=i; //note
+		p[2]=0; //velo
+		midiOutShortMsg(hmo,msg);
+	}
+	return 0;
+}
+int rewind_track(HMIDIOUT hmo,MIDI_TRACK *mt,int *index)
+{
+	int result=FALSE;
+	int time;
+	int i=*index;
+	if(i>=mt->event_count)
+		i=mt->event_count-1;
+	if(i<0)
+		i=0;
+	time=mt->events[i].time;
+	for( ;i>0;i--){
+		MIDI_EVENT *me;
+		me=&mt->events[i];
+		if(me->time<time){
+			int event=me->type&0xF0;
+			int velo=me->data2;
+			if(event==0x90)
+				if(velo!=0){
+					printf("clear\n");
+					clear_all_notes(hmo);
+					*index=i;
+					result=TRUE;
+					break;
+				}
+		}
+	}
+	return result;
+}
+int special_command(HMIDIOUT hmo,MIDI_TRACK *mt,int *index)
+{
+	extern unsigned char in_keys[];
+	int result=FALSE;
+	if(in_keys[0x24]!=0 && in_keys[0x26]!=0){
+		if(in_keys[0x5F]){
+			rewind_track(hmo,mt,index);
+			result=TRUE;
+		}
+	}
+	return result;
+}
+DWORD WINAPI play_midi_thread(void *arg)
+{
+	HMIDIOUT	hmo=arg;
+	MIDI_FILE mf={0};
+	extern HANDLE thread_event;
+	extern unsigned char in_keys[];
+	int index=0;
+	printf("thread\n");
+
+	strncpy(mf.fname,current_fname,sizeof(mf.fname));
+	mf.fname[sizeof(mf.fname)-1]=0;
+	parse_midi_file(&mf);
+	clear_all_notes(hmo);
+
+	while(1){
+		if(hmo!=0){
+			if(mf.track_count==2){
+				MIDI_TRACK *mt;
+				mt=&mf.tracks[1];
+				while(1){
+					if(index>=mt->event_count)
+						index=0;
+					if(mt->event_count>0){
+						MIDI_EVENT *me;
+						int event,key,velo;
+						me=&mt->events[index];
+						event=me->type&0xF0;
+						key=me->data;
+						velo=me->data2;
+						if(event==0x80 || event==0x90){
+							int count=index;
+							if(event==0x90 && velo>1)
+								velo=1;
+							printf("play\n");
+							while(1){
+								if((me->type&0xF0)==0x90)
+									if(me->data2>1)
+										me->data2=1;
+								play_midi_event(hmo,me);
+								count++;
+								if(count>=mt->event_count)
+									break;
+								if(me->time!=mt->events[count].time)
+									break;
+								else
+									me=&mt->events[count];
+							}
+							if(event==0x90 && velo!=0){
+								WaitForSingleObject(thread_event,INFINITE);
+								if(!special_command(hmo,mt,&index)){
+									if(in_keys[key&0xFF]!=0)
+										index++;
+								}
+							}
+							else
+								index++;
+							break;
+						}
+
+					}
+					else
+						break;
+					index++;
+				}
+			}
+		}
+	}
 }

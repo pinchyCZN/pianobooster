@@ -102,19 +102,34 @@ int find_keyboard(MIDI_DEV_LIST *list)
 	}
 	return -1;
 }
-void CALLBACK in_event(HMIDIIN hMidiIn,UINT wMsg,DWORD dwInstance,DWORD dwParam1,DWORD dwParam2)
+
+DWORD WINAPI play_midi_thread(void *arg);
+HANDLE thread_event=0;
+unsigned char in_keys[255]={0};
+
+void CALLBACK in_event(HMIDIIN hmidi,UINT msg,DWORD dwinstance,DWORD p1,DWORD p2)
 {
-	printf("msg=0x%04X %04X %04X\n",wMsg,dwParam1,dwParam2);
-}
-DWORD WINAPI read_midi_thread(void *arg)
-{
-	printf("thread\n");
-	while(1){
-		if(hmi!=0){
-			
-		}
-		Sleep(100);
+	int event,key,velo;
+	event=p1&0xFF;
+	key=(p1>>8)&0xFF;
+	velo=(p1>>16)&0xFF;
+	switch(event){
+	default:
+		break;
+	case 0x90: //key down
+		in_keys[key]=velo;
+		if(thread_event!=0)
+			SetEvent(thread_event);
+		break;
+	case 0x80: //key up
+		in_keys[key]=0;
+		if(thread_event!=0)
+			SetEvent(thread_event);
+		break;
 	}
+	if(event>=0x80 && event<=0xF0)
+		printf("msg=0x%04X %08X %08X\n",msg,p1,p2);
+
 }
 int main(int argc,char **argv)
 {
@@ -132,19 +147,23 @@ int main(int argc,char **argv)
 	if(index_out>=0){
 		index_in=find_keyboard(&mdev_in);
 		if(index_in>=0){
-			//midiOutOpen(&hmo,mdev_out.devices[index].id,NULL,0,CALLBACK_NULL);
 			hmi=0;
 			midiInOpen(&hmi,mdev_in.devices[index_in].id,in_event,0,CALLBACK_FUNCTION);
-			if(hmi!=0)
+			if(hmi!=0){
 				midiInStart(hmi);
+				midiOutOpen(&hmo,mdev_out.devices[index_out].id,NULL,0,CALLBACK_NULL);
+			}
 		}
 	}
 	fname="E:\\music\\Mp3\\MusicStudy\\keyboard\\Scarlatti_Sonate_K.517.mid";
 	if(!file_exist(fname))
 		fname="C:\\temp\\PMLP336239-Scarlatti_Sonate_K.517.mid";
 //	midi_file_test(fname);
-	if(hmi!=0)
-		CreateThread(NULL,0,read_midi_thread,hmi,0,&thread_id);
+	set_current_fname(fname);
+	if(hmi!=0){
+		thread_event=CreateEvent(0,FALSE,FALSE,"thread_event");
+		CreateThread(NULL,0,play_midi_thread,hmo,0,&thread_id);
+	}
 	printf("done\n");
 	while(1){
 		Sleep(100);
