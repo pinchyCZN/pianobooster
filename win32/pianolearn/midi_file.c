@@ -453,12 +453,18 @@ int check_key_press(HMIDIOUT hmo,MIDI_EVENT *mlist,int list_count)
 		result=TRUE;
 	return result;
 }
-int check_commands(MIDI_TRACK *mt,int *index)
+int check_commands(MIDI_TRACK *mt,int *index,int *state)
 {
-	int result=FALSE;
 	extern unsigned char in_keys[];
-	if(in_keys[0x24] && in_keys[0x26]){
-		if(in_keys[0x5F]){
+	int result=FALSE;
+	int t1,t2,c1,c2,c3;
+	t1=in_keys[0x24];
+	t2=in_keys[0x26];
+	c1=in_keys[0x5E];
+	c2=in_keys[0x5F];
+	c3=in_keys[0x60];
+	if(t1 && t2){
+		if(c2){
 			int i,time,target;
 			i=(*index)-1;
 			if(i<=0){
@@ -486,8 +492,57 @@ int check_commands(MIDI_TRACK *mt,int *index)
 			*index=i;
 			printf("end=%i\n",i);
 		}
+		else if(c1){
+			if((*state)==0){
+				*state=1;
+				result=TRUE;
+			}
+		}
+		if((*state)==1){
+			if(c2 || c3){
+				*state=0;
+				result=TRUE;
+			}
+		}
 	}
 	return result;
+}
+int play_track(HMIDIOUT hmo,MIDI_TRACK *mt,int index,int *state)
+{
+	while(1){
+		DWORD time=0,delta;
+		int i;
+		if(index>=mt->event_count)
+			index=0;
+		for(  ;index<mt->event_count;index++){
+			MIDI_EVENT *me=&mt->events[index];
+			int event,velo;
+			event=me->type&0xF0;
+			velo=me->data2;
+			if(event==0x90 || event==0x80){
+				if(time==0){
+					time=me->time;
+				}else{
+					play_midi_event(hmo,me);
+					delta=me->time-time;
+					if(delta!=0){
+						if(delta>1000)
+							delta=1000;
+						Sleep(delta);
+					}
+					time=me->time;
+				}
+			}
+			check_commands(mt,&index,state);
+			if((*state)==0)
+				break;
+		}
+		if((*state)==0)
+			break;
+
+	}
+	*state=0;
+	return TRUE;
 }
 DWORD WINAPI play_midi_thread(void *arg)
 {
@@ -508,8 +563,11 @@ DWORD WINAPI play_midi_thread(void *arg)
 				MIDI_TRACK *mt;
 				mt=&mf.tracks[1];
 				while(1){
+					static int state=0;
 					if(index>=mt->event_count)
 						index=0;
+					if(state==1)
+						play_track(hmo,mt,index,&state);
 					if(seek_next_note(mt,&index)){
 						int next_index=index;
 						ce_count=0;
@@ -521,7 +579,7 @@ DWORD WINAPI play_midi_thread(void *arg)
 								WaitForSingleObject(thread_event,INFINITE);
 								if(check_key_press(hmo,current_events,ce_count))
 									break;
-								if(check_commands(mt,&index)){
+								if(check_commands(mt,&index,&state)){
 									clear_all_notes(hmo);
 									break;
 								}
