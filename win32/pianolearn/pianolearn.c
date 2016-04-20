@@ -127,8 +127,9 @@ void CALLBACK in_event(HMIDIIN hmidi,UINT msg,DWORD dwinstance,DWORD p1,DWORD p2
 			SetEvent(thread_event);
 		break;
 	}
-//	if(event>=0x80 && event<=0xF0)
-//		printf("msg=0x%04X %08X %08X\n",msg,p1,p2);
+	//if(event!=0xF8)
+	//if(event>=0xF0 && event<=0xF8)
+	//	printf("msg=0x%04X %08X %08X\n",msg,p1,p2);
 
 }
 int main(int argc,char **argv)

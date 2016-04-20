@@ -520,18 +520,16 @@ int play_track(HMIDIOUT hmo,MIDI_TRACK *mt,int index,int *state)
 			event=me->type&0xF0;
 			velo=me->data2;
 			if(event==0x90 || event==0x80){
-				if(time==0){
+				if(time==0)
 					time=me->time;
-				}else{
-					play_midi_event(hmo,me);
-					delta=me->time-time;
-					if(delta!=0){
-						if(delta>1000)
-							delta=1000;
-						Sleep(delta);
-					}
-					time=me->time;
+				delta=me->time-time;
+				if(delta!=0){
+					if(delta>1000)
+						delta=1000;
+					Sleep(delta);
 				}
+				time=me->time;
+				play_midi_event(hmo,me);
 			}
 			check_commands(mt,&index,state);
 			if((*state)==0)
