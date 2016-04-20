@@ -507,8 +507,24 @@ int check_commands(MIDI_TRACK *mt,int *index,int *state)
 	}
 	return result;
 }
+int current_instrument=6;
+int set_current_instrument(int i)
+{
+	return current_instrument=i;
+}
+int change_program(HMIDIOUT hmo,int instr)
+{
+	if(hmo!=0){
+		MIDI_EVENT me={0};
+		me.type=0xC0;
+		me.data=instr;
+		play_midi_event(hmo,&me);
+	}
+	return TRUE;
+}
 int play_track(HMIDIOUT hmo,MIDI_TRACK *mt,int index,int *state)
 {
+	change_program(hmo,current_instrument);
 	while(1){
 		DWORD time=0,delta;
 		int i;
