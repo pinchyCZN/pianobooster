@@ -453,18 +453,54 @@ int check_key_press(HMIDIOUT hmo,MIDI_EVENT *mlist,int list_count)
 		result=TRUE;
 	return result;
 }
+int fforward_track(MIDI_TRACK *mt,int *index)
+{
+	int i,time=0;
+	for(i=*index;i<mt->event_count;i++){
+		MIDI_EVENT *me=&mt->events[i];
+		int event,velo;
+		event=me->type&0xF0;
+		velo=me->data2;
+		if(event==0x90 && velo!=0){
+			int delta;
+			if(time==0)
+				time=me->time;
+			delta=me->time-time;
+			if(delta>500){
+				*index=i;
+				break;
+			}
+		}
+	}
+	return 0;
+}
 int check_commands(MIDI_TRACK *mt,int *index,int *state)
 {
 	extern unsigned char in_keys[];
 	int result=FALSE;
-	int t1,t2,c1,c2,c3;
+	int t1,t2,c0,c1,c2,c3;
+	static int lc0,lc1,lc2,lc3;
 	t1=in_keys[0x24];
 	t2=in_keys[0x26];
+	c0=in_keys[0x5D];
 	c1=in_keys[0x5E];
 	c2=in_keys[0x5F];
 	c3=in_keys[0x60];
 	if(t1 && t2){
-		if(c2){
+		if((*state)==1){
+			if(c0 || c2 || c3){
+				*state=0;
+				result=TRUE;
+			}
+		}
+		if(result)
+			goto EXIT;
+		if(c0){
+			*state=0;
+			*index=0;
+			result=TRUE;
+		}
+		if(c2 && (!lc2)){
 			int i,time,target;
 			i=(*index)-1;
 			if(i<=0){
@@ -492,19 +528,23 @@ int check_commands(MIDI_TRACK *mt,int *index,int *state)
 			*index=i;
 			printf("end=%i\n",i);
 		}
-		else if(c1){
+		else if(c3 & (!lc3)){
+			fforward_track(mt,index);
+			result=TRUE;
+		}
+		else if(c1 & (!lc1)){
 			if((*state)==0){
 				*state=1;
 				result=TRUE;
 			}
 		}
-		if((*state)==1){
-			if(c2 || c3){
-				*state=0;
-				result=TRUE;
-			}
-		}
+
 	}
+EXIT:
+	lc0=c0;
+	lc1=c1;
+	lc2=c2;
+	lc3=c3;
 	return result;
 }
 int current_instrument=6;
@@ -556,6 +596,7 @@ int play_track(HMIDIOUT hmo,MIDI_TRACK *mt,int index,int *state)
 
 	}
 	*state=0;
+	clear_all_notes(hmo);
 	return TRUE;
 }
 DWORD WINAPI play_midi_thread(void *arg)
