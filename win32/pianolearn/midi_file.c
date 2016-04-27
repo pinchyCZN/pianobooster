@@ -477,18 +477,20 @@ int fforward_track(MIDI_TRACK *mt,int *index)
 int check_commands(MIDI_TRACK *mt,int *index,int *state)
 {
 	extern unsigned char in_keys[];
+	extern unsigned char trig_keys[];
 	int result=FALSE;
 	int t1,t2,c0,c1,c2,c3;
-	static int lc0,lc1,lc2,lc3;
+	int clear_trig=FALSE;
 	t1=in_keys[0x24];
 	t2=in_keys[0x26];
-	c0=in_keys[0x5D];
-	c1=in_keys[0x5E];
-	c2=in_keys[0x5F];
-	c3=in_keys[0x60];
+	c0=trig_keys[0x5D];
+	c1=trig_keys[0x5E];
+	c2=trig_keys[0x5F];
+	c3=trig_keys[0x60];
 	if(t1 && t2){
 		if((*state)==1){
-			if(c0 || c2 || c3){
+			if(c0 || c1 || c2 || c3){
+				clear_trig=TRUE;
 				*state=0;
 				result=TRUE;
 			}
@@ -496,16 +498,19 @@ int check_commands(MIDI_TRACK *mt,int *index,int *state)
 		if(result)
 			goto EXIT;
 		if(c0){
+			clear_trig=TRUE;
 			*state=0;
 			*index=0;
 			result=TRUE;
 		}
-		if(c2 && (!lc2)){
+		if(c2){
 			int i,time,target;
+			clear_trig=TRUE;
 			i=(*index)-1;
 			if(i<=0){
 				*index=0;
-				return TRUE;
+				result=TRUE;
+				goto EXIT;
 			}
 			time=mt->events[i].time;
 			target=0;
@@ -528,11 +533,13 @@ int check_commands(MIDI_TRACK *mt,int *index,int *state)
 			*index=i;
 			printf("end=%i\n",i);
 		}
-		else if(c3 & (!lc3)){
+		else if(c3){
+			clear_trig=TRUE;
 			fforward_track(mt,index);
 			result=TRUE;
 		}
-		else if(c1 & (!lc1)){
+		else if(c1){
+			clear_trig=TRUE;
 			if((*state)==0){
 				*state=1;
 				result=TRUE;
@@ -541,10 +548,12 @@ int check_commands(MIDI_TRACK *mt,int *index,int *state)
 
 	}
 EXIT:
-	lc0=c0;
-	lc1=c1;
-	lc2=c2;
-	lc3=c3;
+	if(clear_trig){
+		trig_keys[0x5D]=0;
+		trig_keys[0x5E]=0;
+		trig_keys[0x5F]=0;
+		trig_keys[0x60]=0;
+	}
 	return result;
 }
 int current_instrument=6;

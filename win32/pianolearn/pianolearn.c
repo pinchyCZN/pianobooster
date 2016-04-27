@@ -106,6 +106,7 @@ int find_keyboard(MIDI_DEV_LIST *list)
 DWORD WINAPI play_midi_thread(void *arg);
 HANDLE thread_event=0;
 unsigned char in_keys[255]={0};
+unsigned char trig_keys[255]={0};
 
 void CALLBACK in_event(HMIDIIN hmidi,UINT msg,DWORD dwinstance,DWORD p1,DWORD p2)
 {
@@ -117,6 +118,8 @@ void CALLBACK in_event(HMIDIIN hmidi,UINT msg,DWORD dwinstance,DWORD p1,DWORD p2
 	default:
 		break;
 	case 0x90: //key down
+		if(0==in_keys[key])
+			trig_keys[key]=velo;
 		in_keys[key]=velo;
 		if(thread_event!=0)
 			SetEvent(thread_event);
