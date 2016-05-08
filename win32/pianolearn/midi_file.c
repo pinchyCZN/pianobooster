@@ -432,6 +432,18 @@ int gather_notes(MIDI_TRACK *mt,int *index,MIDI_EVENT *mlist,int list_size,int *
 	*total=count;
 	return count;
 }
+int check_note_ranges(MIDI_EVENT *mlist,int count)
+{
+	int i,result=0;
+	for(i=0;i<count;i++){
+		int note=mlist[i].data;
+		if(note<0x24 || note>0x60){
+			mlist[i].data2=0;
+			result++;
+		}
+	}
+	return count-result;
+}
 int check_key_press(HMIDIOUT hmo,MIDI_EVENT *mlist,int list_count)
 {
 	int i,played=0;
@@ -636,6 +648,7 @@ DWORD WINAPI play_midi_thread(void *arg)
 						int next_index=index;
 						ce_count=0;
 						gather_notes(mt,&index,current_events,sizeof(current_events)/sizeof(MIDI_EVENT),&ce_count);
+						ce_count=check_note_ranges(mt,ce_count);
 						if(ce_count>0){
 							printf("time=%i\n",current_events[0].time);
 							play_current_notes(hmo,current_events,ce_count);
