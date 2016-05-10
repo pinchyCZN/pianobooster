@@ -648,8 +648,7 @@ DWORD WINAPI play_midi_thread(void *arg)
 						int next_index=index;
 						ce_count=0;
 						gather_notes(mt,&index,current_events,sizeof(current_events)/sizeof(MIDI_EVENT),&ce_count);
-						ce_count=check_note_ranges(mt,ce_count);
-						if(ce_count>0){
+						if(check_note_ranges(current_events,ce_count)>0){
 							printf("time=%i\n",current_events[0].time);
 							play_current_notes(hmo,current_events,ce_count);
 							while(1){
